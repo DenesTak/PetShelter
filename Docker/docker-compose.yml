@@ -6,9 +6,6 @@ services:
     container_name: mongoDB
     ports:
       - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: shelter
-      MONGO_INITDB_ROOT_PASSWORD: shelter
     volumes:
       - mongodb-data:/data/db
 
