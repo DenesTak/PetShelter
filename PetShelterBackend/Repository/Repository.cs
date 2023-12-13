@@ -1,5 +1,4 @@
-﻿using MongoDB.Bson;
-using MongoDB.Driver;
+﻿using MongoDB.Driver;
 using PetShelterBackend.Models;
 
 namespace PetShelterBackend.Repository;
@@ -17,7 +16,7 @@ public interface IRepository<T> where T : IEntity
 public class Repository<T> : IRepository<T> where T : IEntity
 {
     private readonly IMongoCollection<T> _mongoCollection;
-
+    
     private readonly FilterDefinitionBuilder<T> filterBuilder = new();
 
     public Repository(IMongoCollection<T> mongoCollection)

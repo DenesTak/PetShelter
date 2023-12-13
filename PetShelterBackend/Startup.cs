@@ -1,4 +1,5 @@
-﻿using Microsoft.OpenApi.Models;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
 using MongoDB.Driver;
 using PetShelterBackend.Models;
 using PetShelterBackend.Repository;
@@ -17,8 +18,6 @@ public class Startup
     
     public void ConfigureServices(IServiceCollection services)
     {
-        
-        
         var settings = Configuration.GetSection("MongoDBSettings");
         var client = new MongoClient(settings.Get<MongoDBSettings>().ConnectionString);
         var database = client.GetDatabase("PetShelter");

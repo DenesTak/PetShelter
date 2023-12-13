@@ -20,7 +20,7 @@ public class PetsController : ControllerBase
     public async Task<IActionResult> GetAllPets()
     {
         var pets = await _petRepository.GetAllAsync();
-        return Ok(pets);
+        return Ok(pets.Select(p => p.AsDto()).ToList());
     }
 
     // GET: api/Pets/5
@@ -28,10 +28,7 @@ public class PetsController : ControllerBase
     public async Task<IActionResult> GetById(Guid id)
     {
         object? pet = await _petRepository.GetAsync(id);
-        if (pet == null)
-        {
-            return NotFound();
-        }
+        if (pet == null) return NotFound();
         return Ok(pet);
     }
 
@@ -53,7 +50,6 @@ public class PetsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = pet.Id }, pet);
     }
 
-    //TODO : CHECK HOW TO DO PROPERLY
     // PUT: api/Pets/5
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateAsync(Guid id, Dtos.UpdatePetDto updatePet)
@@ -71,6 +67,45 @@ public class PetsController : ControllerBase
         await _petRepository.UpdateAsync(existingPet);
 
         return NoContent();
+    }
+
+    // GET: api/Pets/ByShelter/{shelterId}
+    [HttpGet("ByShelter/{shelterId}")]
+    public async Task<IActionResult> GetByShelter(Guid shelterId)
+    {
+        var pets = await _petRepository.GetAllAsync();
+        pets = pets.Where(p => p.Shelter == shelterId).ToList();
+        if (pets == null || !pets.Any())
+            return NotFound($"No pets found for shelter with ID {shelterId}");
+
+        return Ok(pets.Select(p => p.AsDto()).ToList());
+    }
+
+    // POST: api/Pets/AddToShelter
+    [HttpPost("AddToShelter")]
+    public async Task<IActionResult> AddToShelter(Guid petId, Guid shelterId)
+    {
+        var pet = await _petRepository.GetAsync(petId);
+        if (pet == null)
+            return NotFound($"Pet with ID {petId} not found.");
+
+        pet.Shelter = shelterId;
+
+        await _petRepository.UpdateAsync(pet);
+
+        return Ok($"Pet with ID {petId} added to shelter with ID {shelterId}.");
+    }
+
+    // POST: api/Pets/RemoveFromShelter
+    [HttpPost("RemoveFromShelter")]
+    public async Task<IActionResult> RemoveFromShelter(Guid petId)
+    {
+        var pet = await _petRepository.GetAsync(petId);
+        if (pet == null)
+            return NotFound($"Pet with ID {petId} not found.");
+        pet.Shelter = null;
+        await _petRepository.UpdateAsync(pet);
+        return Ok($"Pet with ID {petId} removed from the shelter.");
     }
 
     // DELETE: api/Pets/5
