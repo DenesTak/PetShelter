@@ -8,28 +8,59 @@ namespace PetShelterBackend.Controller;
 [ApiController]
 public class PetsController : ControllerBase
 {
-    private readonly IRepository<Pet> _petRepository;
-
-    public PetsController(IRepository<Pet> petRepository)
+    private readonly IMongoRepository<Pet> _petMongoRepository;
+    private readonly IPostgreSQLRepository<Pet> _petPostgreSQLRepository;
+    
+    public PetsController(IMongoRepository<Pet> petMongoRepository, IPostgreSQLRepository<Pet> petPostgreSQLRepository)
     {
-        _petRepository = petRepository;
+        _petMongoRepository = petMongoRepository;
+        _petPostgreSQLRepository = petPostgreSQLRepository;
     }
 
-    // GET: api/Pets
     [HttpGet]
     public async Task<IActionResult> GetAllPets()
     {
-        var pets = await _petRepository.GetAllAsync();
-        return Ok(pets.Select(p => p.AsDto()).ToList());
+        var petsFromMongo = await _petMongoRepository.GetAllAsync();
+        var petsFromPostgreSQL = await _petPostgreSQLRepository.GetAllAsync();
+
+        // Convert the pets to DTOs
+        var petsDtoFromMongo = petsFromMongo.Select(p => p.AsDto()).ToList();
+        var petsDtoFromPostgreSQL = petsFromPostgreSQL.Select(p => p.AsDto()).ToList();
+
+        // Create a dictionary with the pets grouped by source database
+        var petsDictionary = new Dictionary<string, List<Dtos.PetDto>>
+        {
+            { "MongoDB", petsDtoFromMongo },
+            { "PostgreSQL", petsDtoFromPostgreSQL }
+        };
+
+        return Ok(petsDictionary);
     }
 
-    // GET: api/Pets/5
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        object? pet = await _petRepository.GetAsync(id);
-        if (pet == null) return NotFound();
-        return Ok(pet);
+        var petFromMongo = await _petMongoRepository.GetAsync(id);
+        var petFromPostgreSQL = await _petPostgreSQLRepository.GetAsync(id);
+
+        // Convert the pets to DTOs
+        var petDtoFromMongo = petFromMongo?.AsDto();
+        var petDtoFromPostgreSQL = petFromPostgreSQL?.AsDto();
+
+        // Create a dictionary with the pets grouped by source database
+        var petsDictionary = new Dictionary<string, Dtos.PetDto>
+        {
+            { "MongoDB", petDtoFromMongo },
+            { "PostgreSQL", petDtoFromPostgreSQL }
+        };
+
+        // Check if the pet was found in either database
+        if (petDtoFromMongo == null && petDtoFromPostgreSQL == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(petsDictionary);
     }
 
     // POST: api/Pets
@@ -46,76 +77,203 @@ public class PetsController : ControllerBase
             Shelter = addPet.Shelter ?? Guid.Empty,
             CreatedDate = DateTime.UtcNow
         };
-        await _petRepository.CreateAsync(pet);
-        return CreatedAtAction(nameof(GetById), new { id = pet.Id }, pet);
+
+        // Create the pet in MongoDB
+        await _petMongoRepository.CreateAsync(pet);
+        var petDtoFromMongo = pet.AsDto();
+
+        // Create the pet in PostgreSQL
+        await _petPostgreSQLRepository.CreateAsync(pet);
+        var petDtoFromPostgreSQL = pet.AsDto();
+
+        // Create a dictionary with the pets grouped by source database
+        var petsDictionary = new Dictionary<string, Dtos.PetDto>
+        {
+            { "MongoDB", petDtoFromMongo },
+            { "PostgreSQL", petDtoFromPostgreSQL }
+        };
+
+        return CreatedAtAction(nameof(GetById), new { id = pet.Id }, petsDictionary);
     }
 
     // PUT: api/Pets/5
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateAsync(Guid id, Dtos.UpdatePetDto updatePet)
     {
-        var existingPet = await _petRepository.GetAsync(id);
+        var existingPetFromMongo = await _petMongoRepository.GetAsync(id);
+        var existingPetFromPostgreSQL = await _petPostgreSQLRepository.GetAsync(id);
 
-        if (existingPet == null)
+        if (existingPetFromMongo == null && existingPetFromPostgreSQL == null)
+        {
             return NotFound();
+        }
 
-        existingPet.Name = updatePet.Name;
-        existingPet.Skin = updatePet.Skin;
-        existingPet.Species = updatePet.Species;
-        existingPet.Age = existingPet.Age;
+        if (existingPetFromMongo != null)
+        {
+            existingPetFromMongo.Name = updatePet.Name;
+            existingPetFromMongo.Skin = updatePet.Skin;
+            existingPetFromMongo.Species = updatePet.Species;
+            existingPetFromMongo.Age = updatePet.Age;
 
-        await _petRepository.UpdateAsync(existingPet);
+            await _petMongoRepository.UpdateAsync(existingPetFromMongo);
+        }
 
+        if (existingPetFromPostgreSQL != null)
+        {
+            existingPetFromPostgreSQL.Name = updatePet.Name;
+            existingPetFromPostgreSQL.Skin = updatePet.Skin;
+            existingPetFromPostgreSQL.Species = updatePet.Species;
+            existingPetFromPostgreSQL.Age = updatePet.Age;
+
+            await _petPostgreSQLRepository.UpdateAsync(existingPetFromPostgreSQL);
+        }
+        
         return NoContent();
     }
+
 
     // GET: api/Pets/ByShelter/{shelterId}
     [HttpGet("ByShelter/{shelterId}")]
     public async Task<IActionResult> GetByShelter(Guid shelterId)
     {
-        var pets = await _petRepository.GetAllAsync();
-        pets = pets.Where(p => p.Shelter == shelterId).ToList();
-        if (pets == null || !pets.Any())
-            return NotFound($"No pets found for shelter with ID {shelterId}");
+        var petsFromMongo = await _petMongoRepository.GetAllAsync();
+        var petsFromPostgreSQL = await _petPostgreSQLRepository.GetAllAsync();
 
-        return Ok(pets.Select(p => p.AsDto()).ToList());
+        // Filter the pets that belong to the given shelter
+        var petsFromMongoInShelter = petsFromMongo.Where(p => p.Shelter == shelterId).ToList();
+        var petsFromPostgreSQLInShelter = petsFromPostgreSQL.Where(p => p.Shelter == shelterId).ToList();
+
+        // Convert the pets to DTOs
+        var petsDtoFromMongo = petsFromMongoInShelter.Select(p => p.AsDto()).ToList();
+        var petsDtoFromPostgreSQL = petsFromPostgreSQLInShelter.Select(p => p.AsDto()).ToList();
+
+        // Create a dictionary with the pets grouped by source database
+        var petsDictionary = new Dictionary<string, List<Dtos.PetDto>>
+        {
+            { "MongoDB", petsDtoFromMongo },
+            { "PostgreSQL", petsDtoFromPostgreSQL }
+        };
+
+        // Check if any pets were found in either database
+        if (!petsDtoFromMongo.Any() && !petsDtoFromPostgreSQL.Any())
+        {
+            return NotFound($"No pets found for shelter with ID {shelterId}");
+        }
+
+        return Ok(petsDictionary);
     }
 
     // POST: api/Pets/AddToShelter
     [HttpPost("AddToShelter")]
     public async Task<IActionResult> AddToShelter(Guid petId, Guid shelterId)
     {
-        var pet = await _petRepository.GetAsync(petId);
-        if (pet == null)
+        var petFromMongo = await _petMongoRepository.GetAsync(petId);
+        var petFromPostgreSQL = await _petPostgreSQLRepository.GetAsync(petId);
+
+        if (petFromMongo == null && petFromPostgreSQL == null)
+        {
             return NotFound($"Pet with ID {petId} not found.");
+        }
 
-        pet.Shelter = shelterId;
+        if (petFromMongo != null)
+        {
+            petFromMongo.Shelter = shelterId;
+            await _petMongoRepository.UpdateAsync(petFromMongo);
+        }
 
-        await _petRepository.UpdateAsync(pet);
+        if (petFromPostgreSQL != null)
+        {
+            petFromPostgreSQL.Shelter = shelterId;
+            await _petPostgreSQLRepository.UpdateAsync(petFromPostgreSQL);
+        }
 
-        return Ok($"Pet with ID {petId} added to shelter with ID {shelterId}.");
+        // Convert the pets to DTOs
+        var petDtoFromMongo = petFromMongo?.AsDto();
+        var petDtoFromPostgreSQL = petFromPostgreSQL?.AsDto();
+
+        // Create a dictionary with the pets grouped by source database
+        var petsDictionary = new Dictionary<string, Dtos.PetDto>
+        {
+            { "MongoDB", petDtoFromMongo },
+            { "PostgreSQL", petDtoFromPostgreSQL }
+        };
+
+        return Ok(petsDictionary);
     }
-
+    
     // POST: api/Pets/RemoveFromShelter
     [HttpPost("RemoveFromShelter")]
     public async Task<IActionResult> RemoveFromShelter(Guid petId)
     {
-        var pet = await _petRepository.GetAsync(petId);
-        if (pet == null)
+        var petFromMongo = await _petMongoRepository.GetAsync(petId);
+        var petFromPostgreSQL = await _petPostgreSQLRepository.GetAsync(petId);
+
+        if (petFromMongo == null && petFromPostgreSQL == null)
+        {
             return NotFound($"Pet with ID {petId} not found.");
-        pet.Shelter = null;
-        await _petRepository.UpdateAsync(pet);
-        return Ok($"Pet with ID {petId} removed from the shelter.");
+        }
+
+        if (petFromMongo != null)
+        {
+            petFromMongo.Shelter = null;
+            await _petMongoRepository.UpdateAsync(petFromMongo);
+        }
+
+        if (petFromPostgreSQL != null)
+        {
+            petFromPostgreSQL.Shelter = null;
+            await _petPostgreSQLRepository.UpdateAsync(petFromPostgreSQL);
+        }
+
+        // Convert the pets to DTOs
+        var petDtoFromMongo = petFromMongo?.AsDto();
+        var petDtoFromPostgreSQL = petFromPostgreSQL?.AsDto();
+
+        // Create a dictionary with the pets grouped by source database
+        var petsDictionary = new Dictionary<string, Dtos.PetDto>
+        {
+            { "MongoDB", petDtoFromMongo },
+            { "PostgreSQL", petDtoFromPostgreSQL }
+        };
+
+        return Ok(petsDictionary);
     }
+
 
     // DELETE: api/Pets/5
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteAsync(Guid id)
     {
-        var pet = await _petRepository.GetAsync(id);
-        if (pet == null)
+        var petFromMongo = await _petMongoRepository.GetAsync(id);
+        var petFromPostgreSQL = await _petPostgreSQLRepository.GetAsync(id);
+
+        if (petFromMongo == null && petFromPostgreSQL == null)
+        {
             return NotFound();
-        await _petRepository.RemoveAsync(pet.Id);
-        return NoContent();
+        }
+
+        if (petFromMongo != null)
+        {
+            await _petMongoRepository.RemoveAsync(petFromMongo.Id);
+        }
+
+        if (petFromPostgreSQL != null)
+        {
+            await _petPostgreSQLRepository.RemoveAsync(petFromPostgreSQL.Id);
+        }
+
+        // Convert the pets to DTOs
+        var petDtoFromMongo = petFromMongo?.AsDto();
+        var petDtoFromPostgreSQL = petFromPostgreSQL?.AsDto();
+
+        // Create a dictionary with the pets grouped by source database
+        var petsDictionary = new Dictionary<string, Dtos.PetDto>
+        {
+            { "MongoDB", petDtoFromMongo },
+            { "PostgreSQL", petDtoFromPostgreSQL }
+        };
+
+        return Ok(petsDictionary);
     }
+
 }

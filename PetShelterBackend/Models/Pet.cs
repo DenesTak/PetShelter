@@ -1,7 +1,10 @@
-﻿namespace PetShelterBackend.Models;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace PetShelterBackend.Models;
 
 public class Pet : IEntity
 {
+    [Key]
     public Guid Id { get; set; }
     public string Name { get; set; }
     public string Species { get; set; }

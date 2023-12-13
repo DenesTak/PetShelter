@@ -8,18 +8,18 @@ namespace PetShelterBackend.Controller;
 [ApiController]
 public class ShelterController : ControllerBase
 {
-    private readonly IRepository<Shelter> _shelterRepository;
+    private readonly IMongoRepository<Shelter> _shelterMongoRepository;
 
-    public ShelterController(IRepository<Shelter> shelterRepository)
+    public ShelterController(IMongoRepository<Shelter> shelterMongoRepository)
     {
-        _shelterRepository = shelterRepository;
+        _shelterMongoRepository = shelterMongoRepository;
     }
     
     // GET: api/shelters
     [HttpGet]
     public async Task<IActionResult> GetAllShelters()
     {
-        var shelters = await _shelterRepository.GetAllAsync();
+        var shelters = await _shelterMongoRepository.GetAllAsync();
         return Ok(shelters);
     }
     
@@ -27,7 +27,7 @@ public class ShelterController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        object? pet = await _shelterRepository.GetAsync(id);
+        object? pet = await _shelterMongoRepository.GetAsync(id);
         if (pet == null)
         {
             return NotFound();
@@ -46,7 +46,7 @@ public class ShelterController : ControllerBase
             Capacity = addShelter.Capacity,
             CreatedDate = DateTime.UtcNow
         };
-        await _shelterRepository.CreateAsync(shelter);
+        await _shelterMongoRepository.CreateAsync(shelter);
         return CreatedAtAction(nameof(GetById), new { id = shelter.Id }, shelter);
     }
 
@@ -55,7 +55,7 @@ public class ShelterController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateAsync(Guid id, Dtos.UpdateShelterDto updateShelter)
     {
-        var existingShelter = await _shelterRepository.GetAsync(id);
+        var existingShelter = await _shelterMongoRepository.GetAsync(id);
 
         if (existingShelter == null)
             return NotFound();
@@ -64,7 +64,7 @@ public class ShelterController : ControllerBase
         existingShelter.Location = updateShelter.Location;
         existingShelter.Capacity = updateShelter.Capacity;
 
-        await _shelterRepository.UpdateAsync(existingShelter);
+        await _shelterMongoRepository.UpdateAsync(existingShelter);
 
         return NoContent();
     }
@@ -73,10 +73,10 @@ public class ShelterController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteAsync(Guid id)
     {
-        var shelter = await _shelterRepository.GetAsync(id);
+        var shelter = await _shelterMongoRepository.GetAsync(id);
         if (shelter == null)
             return NotFound();
-        await _shelterRepository.RemoveAsync(shelter.Id);
+        await _shelterMongoRepository.RemoveAsync(shelter.Id);
         return NoContent();
     }
     

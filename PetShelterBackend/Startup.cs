@@ -18,6 +18,11 @@ public class Startup
     
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddSingleton<PetShelterContext>(provider =>
+            new PetShelterContext(new DbContextOptionsBuilder<PetShelterContext>()
+                .UseNpgsql(Configuration.GetConnectionString("PostgresConnection"))
+                .Options));
+        
         var settings = Configuration.GetSection("MongoDBSettings");
         var client = new MongoClient(settings.Get<MongoDBSettings>().ConnectionString);
         var database = client.GetDatabase("PetShelter");
@@ -46,8 +51,13 @@ public class Startup
             return db.GetCollection<Shelter>("Shelters");
         });
 
-        services.AddSingleton<IRepository<Pet>, Repository<Pet>>();
-        services.AddSingleton<IRepository<Shelter>, Repository<Shelter>>();
+        services.AddSingleton<IMongoRepository<Pet>, MongoRepository<Pet>>();
+        services.AddSingleton<IMongoRepository<Shelter>, MongoRepository<Shelter>>();
+
+        services.AddScoped<IPostgreSQLRepository<Pet>, PostgreSQLRepository<Pet>>();
+        services.AddScoped<IPostgreSQLRepository<Shelter>, PostgreSQLRepository<Shelter>>();
+        
+
         
         services.AddControllers(options =>
         {
@@ -60,6 +70,11 @@ public class Startup
 
     public async Task Configure(WebApplication app, IWebHostEnvironment env)
     {
+        using (var scope = app.Services.CreateScope())
+        {
+            var services = scope.ServiceProvider;
+            await services.GetRequiredService<PetShelterContext>().Database.EnsureCreatedAsync();
+        }
         if (env.IsDevelopment())
         {
             app.UseSwagger();

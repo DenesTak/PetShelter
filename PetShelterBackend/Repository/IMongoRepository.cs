@@ -3,7 +3,7 @@ using PetShelterBackend.Models;
 
 namespace PetShelterBackend.Repository;
 
-public interface IRepository<T> where T : IEntity
+public interface IMongoRepository<T> where T : IEntity
 {
     Task<IReadOnlyCollection<T>> GetAllAsync();
     Task CreateAsync(T entity);
@@ -13,13 +13,13 @@ public interface IRepository<T> where T : IEntity
     Task DeleteAsync(Guid id);
 }
 
-public class Repository<T> : IRepository<T> where T : IEntity
+public class MongoRepository<T> : IMongoRepository<T> where T : IEntity
 {
     private readonly IMongoCollection<T> _mongoCollection;
     
     private readonly FilterDefinitionBuilder<T> filterBuilder = new();
 
-    public Repository(IMongoCollection<T> mongoCollection)
+    public MongoRepository(IMongoCollection<T> mongoCollection)
     {
         _mongoCollection = mongoCollection;
     }
