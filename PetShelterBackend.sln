@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PetShelterBackend", "PetShelterBackend\PetShelterBackend.csproj", "{D23CCFE1-014E-4CED-BF51-3A4B1988BD87}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestPetShelterBackend", "TestPetShelterBackend\TestPetShelterBackend.csproj", "{A889A594-334D-47D2-9122-6C346E00CBA3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D23CCFE1-014E-4CED-BF51-3A4B1988BD87}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D23CCFE1-014E-4CED-BF51-3A4B1988BD87}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D23CCFE1-014E-4CED-BF51-3A4B1988BD87}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D23CCFE1-014E-4CED-BF51-3A4B1988BD87}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A889A594-334D-47D2-9122-6C346E00CBA3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A889A594-334D-47D2-9122-6C346E00CBA3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A889A594-334D-47D2-9122-6C346E00CBA3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A889A594-334D-47D2-9122-6C346E00CBA3}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
