@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using PetShelterBackend.Models;
+using PetShelterBackend.Models.PostgreSqlModel;
 using PetShelterBackend.Repository;
 
 namespace PetShelterBackend.Controller;
@@ -8,64 +9,130 @@ namespace PetShelterBackend.Controller;
 [ApiController]
 public class ShelterController : ControllerBase
 {
-    private readonly IMongoRepository<Shelter> _shelterMongoRepository;
+    private readonly IMongoRepository<PetShelterMongo> _shelterMongoRepository;
+    private readonly IPostgreSQLRepository<PetShelterPost> _shelterPostSqlRepository;
+    
+    private readonly IMongoRepository<PetMongo> _petMongoRepository;
+    private readonly IPostgreSQLRepository<PetPost> _petPostgreSQLRepository;
 
-    public ShelterController(IMongoRepository<Shelter> shelterMongoRepository)
+    public ShelterController(IMongoRepository<PetShelterMongo> shelterMongoRepository,
+        IPostgreSQLRepository<PetShelterPost> postgreSqlRepository)
     {
         _shelterMongoRepository = shelterMongoRepository;
+        _shelterPostSqlRepository = postgreSqlRepository;
     }
-    
+
     // GET: api/shelters
     [HttpGet]
     public async Task<IActionResult> GetAllShelters()
     {
-        var shelters = await _shelterMongoRepository.GetAllAsync();
-        return Ok(shelters);
+        var petShelterMongoTask = _shelterMongoRepository.GetAllAsync();
+        var petShelterPostTask = _shelterPostSqlRepository.GetAllAsync();
+
+        await Task.WhenAll(petShelterMongoTask, petShelterPostTask);
+
+        var petShelterMongo = petShelterMongoTask.Result;
+        var petShelterPost = petShelterPostTask.Result;
+
+        var sheltersAsDtoMongo = petShelterMongo.Select(s => s.AsDto()).ToList();
+        var sheltersAsDtoPost = petShelterPost.Select(s => s.AsDto()).ToList();
+
+        var sheltersDictionary = new Dictionary<string, List<Dtos.PetShelterDto>>
+        {
+            { "MongoDB", sheltersAsDtoMongo },
+            { "PostgreSQL", sheltersAsDtoPost }
+        };
+
+        return Ok(sheltersDictionary);
     }
-    
+
     // GET: api/Pets/5
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        object? pet = await _shelterMongoRepository.GetAsync(id);
-        if (pet == null)
+        var sheltersFromMongo = await _shelterMongoRepository.GetAsync(id);
+        var sheltersFromPost = await _shelterPostSqlRepository.GetAsync(id);
+
+        // Convert the pets to DTOs
+        var petDtoFromMongo = sheltersFromMongo.AsDto();
+        var petShelterPost = sheltersFromPost.AsDto();
+
+        // Create a dictionary with the pets grouped by source database
+        var petsDictionary = new Dictionary<string, Dtos.PetShelterDto>
         {
-            return NotFound();
-        }
-        return Ok(pet);
+            { "MongoDB", petDtoFromMongo },
+            { "PostgreSQL", petShelterPost }
+        };
+
+        // Check if the pet was found in either database
+        if (petDtoFromMongo == null && petShelterPost == null) return NotFound();
+
+        return Ok(petsDictionary);
     }
-    
+
     [HttpPost]
-    public async Task<IActionResult> CreatePet(Dtos.AddShelterDto addShelter)
+    public async Task<IActionResult> CreateShelter(Dtos.AddPetShelterDto addShelter)
     {
-        var shelter = new Shelter
+        var guid = Guid.NewGuid();
+        var createdDate = DateTime.UtcNow;
+        
+        var shelterMongo = new PetShelterMongo
         {
-            Id = new Guid(),
+            Id = guid,
             Name = addShelter.Name,
             Location = addShelter.Location,
             Capacity = addShelter.Capacity,
-            CreatedDate = DateTime.UtcNow
+            CreatedDate = createdDate,
+            PetsInShelter = new List<PetMongo>()
         };
-        await _shelterMongoRepository.CreateAsync(shelter);
-        return CreatedAtAction(nameof(GetById), new { id = shelter.Id }, shelter);
+
+        var shelterPost = new PetShelterPost
+        {
+            Id = guid,
+            Name = addShelter.Name,
+            Location = addShelter.Location,
+            Capacity = addShelter.Capacity,
+            CreatedDate = createdDate,
+            PetsInShelter = new List<PetPost>()
+        };
+
+        var mongoTask = _shelterMongoRepository.CreateAsync(shelterMongo);
+        var postTask = _shelterPostSqlRepository.CreateAsync(shelterPost);
+
+        await Task.WhenAll(mongoTask, postTask);
+
+        var shelterDtoFromMongo = shelterMongo.AsDto();
+        var shelterDtoFromPostgreSQL = shelterPost.AsDto();
+
+        var pets = new
+        {
+            MongoDB = shelterDtoFromMongo,
+            PostgreSQL = shelterDtoFromPostgreSQL
+        };
+
+        return Ok(pets);
     }
 
-    //TODO : CHECK HOW TO DO PROPERLY
     // PUT: api/Pets/5
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateAsync(Guid id, Dtos.UpdateShelterDto updateShelter)
+    public async Task<IActionResult> UpdateAsync(Guid id, Dtos.UpdatePetShelterDto updateShelter)
     {
-        var existingShelter = await _shelterMongoRepository.GetAsync(id);
+        var existingShelterMongo = await _shelterMongoRepository.GetAsync(id);
+        var existingShelterPost = await _shelterPostSqlRepository.GetAsync(id);
 
-        if (existingShelter == null)
+        if (existingShelterMongo == null || existingShelterPost == null)
             return NotFound();
 
-        existingShelter.Name = updateShelter.Name;
-        existingShelter.Location = updateShelter.Location;
-        existingShelter.Capacity = updateShelter.Capacity;
+        existingShelterMongo.Name = updateShelter.Name;
+        existingShelterMongo.Location = updateShelter.Location;
+        existingShelterMongo.Capacity = updateShelter.Capacity;
 
-        await _shelterMongoRepository.UpdateAsync(existingShelter);
+        existingShelterPost.Name = updateShelter.Name;
+        existingShelterPost.Location = updateShelter.Location;
+        existingShelterPost.Capacity = updateShelter.Capacity;
 
+        await _shelterMongoRepository.UpdateAsync(existingShelterMongo);
+        await _shelterPostSqlRepository.UpdateAsync(existingShelterPost);
         return NoContent();
     }
 
@@ -73,12 +140,48 @@ public class ShelterController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteAsync(Guid id)
     {
-        var shelter = await _shelterMongoRepository.GetAsync(id);
-        if (shelter == null)
+        var petFromMongo = await _shelterMongoRepository.GetAsync(id);
+        var petFromPostgreSQL = await _shelterPostSqlRepository.GetAsync(id);
+
+        if (petFromMongo == null || petFromPostgreSQL == null)
             return NotFound();
-        await _shelterMongoRepository.RemoveAsync(shelter.Id);
+
+        if (petFromMongo != null)
+            await _shelterMongoRepository.RemoveAsync(petFromMongo.Id);
+
+        if (petFromPostgreSQL != null)
+            await _shelterPostSqlRepository.RemoveAsync(petFromPostgreSQL.Id);
+
         return NoContent();
     }
     
+    [HttpGet("{id}/getShelterWithPets")]
+    public async Task<IActionResult> GetShelterWithPets(Guid id)
+    {
+        // Fetch the shelter from both databases
+        var shelterFromMongo = await _shelterMongoRepository.GetAsync(id);
+        var shelterFromPostgreSQL = await _shelterPostSqlRepository.GetAsync(id);
 
+        // Check if the shelter was found in either database
+        if (shelterFromMongo == null && shelterFromPostgreSQL == null) return NotFound();
+
+        // Fetch the pets associated with the shelter from both databases
+        var petsFromMongo = await _petMongoRepository.GetAsync(p => p.ShelterId == id);
+        var petsFromPostgreSQL = await _petPostgreSQLRepository.GetAsync(p => p.ShelterId == id);
+
+        // Convert the shelter and pets to DTOs
+        var shelterDtoFromMongo = shelterFromMongo.AsDto();
+        var shelterDtoFromPostgreSQL = shelterFromPostgreSQL.AsDto();
+        var petsDtoFromMongo = petsFromMongo.Select(p => p.AsDto()).ToList();
+        var petsDtoFromPostgreSQL = petsFromPostgreSQL.Select(p => p.AsDto()).ToList();
+
+        // Create a dictionary with the shelter and pets grouped by source database
+        var shelterDictionary = new Dictionary<string, object>
+        {
+            { "MongoDB", new { Shelter = shelterDtoFromMongo, Pets = petsDtoFromMongo } },
+            { "PostgreSQL", new { Shelter = shelterDtoFromPostgreSQL, Pets = petsDtoFromPostgreSQL } }
+        };
+
+        return Ok(shelterDictionary);
+    }
 }
